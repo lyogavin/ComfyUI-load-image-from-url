@@ -4,6 +4,7 @@ import requests
 from io import BytesIO
 import os
 import numpy as np
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 
 def pil2tensor(img):
@@ -34,13 +35,28 @@ def pil2tensor(img):
     return (output_image, output_mask)
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((
+        requests.exceptions.ConnectionError,
+        requests.exceptions.Timeout,
+        requests.exceptions.TooManyRedirects,
+        requests.exceptions.ChunkedEncodingError,
+        requests.exceptions.ContentDecodingError,
+        requests.exceptions.HTTPError
+    )),
+    reraise=True
+)
 def load_image(image_source):
     if image_source.startswith('http'):
-        print(image_source)
-        response = requests.get(image_source)
+        print(f"Fetching image from URL: {image_source}")
+        response = requests.get(image_source, timeout=30)
+        response.raise_for_status()  # Raise exception for 4XX/5XX responses
         img = Image.open(BytesIO(response.content))
         file_name = image_source.split('/')[-1]
     else:
+        print(f"Loading image from path: {image_source}")
         img = Image.open(image_source)
         file_name = os.path.basename(image_source)
     return img, file_name
