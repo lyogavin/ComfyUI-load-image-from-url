@@ -25,9 +25,15 @@ def pil2tensor(img):
         output_images.append(image)
         output_masks.append(mask.unsqueeze(0))
 
+    # if multiple images and all are the same size, concatenate them
+    # otherwise, return the first image
     if len(output_images) > 1:
-        output_image = torch.cat(output_images, dim=0)
-        output_mask = torch.cat(output_masks, dim=0)
+        if all(img.shape == output_images[0].shape for img in output_images):
+            output_image = torch.cat(output_images, dim=0)
+            output_mask = torch.cat(output_masks, dim=0)
+        else:
+            output_image = output_images[0]
+            output_mask = output_masks[0]
     else:
         output_image = output_images[0]
         output_mask = output_masks[0]
