@@ -5,13 +5,33 @@ from io import BytesIO
 import os
 import numpy as np
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import cv2
 
 
 def pil2tensor(img):
     output_images = []
     output_masks = []
-    for i in ImageSequence.Iterator(img):
-        i = ImageOps.exif_transpose(i)
+    
+    try:
+        # Try to iterate through image sequence
+        for i in ImageSequence.Iterator(img):
+            i = ImageOps.exif_transpose(i)
+            if i.mode == 'I':
+                i = i.point(lambda i: i * (1 / 255))
+            image = i.convert("RGB")
+            image = np.array(image).astype(np.float32) / 255.0
+            image = torch.from_numpy(image)[None,]
+            if 'A' in i.getbands():
+                mask = np.array(i.getchannel('A')).astype(np.float32) / 255.0
+                mask = 1. - torch.from_numpy(mask)
+            else:
+                mask = torch.zeros((64,64), dtype=torch.float32, device="cpu")
+            output_images.append(image)
+            output_masks.append(mask.unsqueeze(0))
+    except Exception as e:
+        # Handle non-sequence images
+        print(f"Processing as single image: {e}")
+        i = ImageOps.exif_transpose(img)
         if i.mode == 'I':
             i = i.point(lambda i: i * (1 / 255))
         image = i.convert("RGB")
@@ -59,11 +79,32 @@ def load_image(image_source):
         print(f"Fetching image from URL: {image_source}")
         response = requests.get(image_source, timeout=30)
         response.raise_for_status()  # Raise exception for 4XX/5XX responses
-        img = Image.open(BytesIO(response.content))
+        try:
+            img = Image.open(BytesIO(response.content))
+        except Exception as e:
+            print(f"PIL failed to open image, trying OpenCV: {str(e)}")
+            # Try with OpenCV
+            nparr = np.frombuffer(response.content, np.uint8)
+            img_cv2 = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img_cv2 is None:
+                raise Exception("Both PIL and OpenCV failed to load the image")
+            # Convert from BGR to RGB and create PIL Image
+            img_rgb = cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(img_rgb)
         file_name = image_source.split('/')[-1]
     else:
         print(f"Loading image from path: {image_source}")
-        img = Image.open(image_source)
+        try:
+            img = Image.open(image_source)
+        except Exception as e:
+            print(f"PIL failed to open image, trying OpenCV: {str(e)}")
+            # Try with OpenCV
+            img_cv2 = cv2.imread(image_source)
+            if img_cv2 is None:
+                raise Exception("Both PIL and OpenCV failed to load the image")
+            # Convert from BGR to RGB and create PIL Image
+            img_rgb = cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(img_rgb)
         file_name = os.path.basename(image_source)
     return img, file_name
 
