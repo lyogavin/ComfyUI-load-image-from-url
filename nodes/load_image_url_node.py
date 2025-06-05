@@ -115,6 +115,8 @@ class LoadImageByUrlOrPath:
         return {
             "required": {
                 "url_or_path": ("STRING", {"multiline": True, "dynamicPrompts": False}),
+            },
+            "optional": {
                 "trigger_always": ("BOOLEAN", {"default": True, "label_on": "enable", "label_off": "disable"}),
             }
         }
