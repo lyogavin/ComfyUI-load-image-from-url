@@ -116,9 +116,6 @@ class LoadImageByUrlOrPath:
             "required": {
                 "url_or_path": ("STRING", {"multiline": True, "dynamicPrompts": False}),
             },
-            "optional": {
-                "trigger_always": ("BOOLEAN", {"default": True, "label_on": "enable", "label_off": "disable"}),
-            }
         }
 
 
@@ -134,13 +131,7 @@ class LoadImageByUrlOrPath:
 
     @classmethod
     def IS_CHANGED(s, image, link_id, save_to_workflow, image_data, trigger_always):
-        if trigger_always:
-            return float("NaN")
-        else:
-            if save_to_workflow:
-                return hash(image_data)
-            else:
-                return hash(image)
+        return float("NaN")
 
 
 if __name__ == "__main__":
